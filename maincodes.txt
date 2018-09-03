@@ -1,0 +1,181 @@
+create table employee(emp_id varchar2(20) constraint emp_pk primary key, ename varchar2(20) not null,
+gender varchar2(10) constraint emp_ch_gen check(gender in ('male','female','other')),city varchar2(20),state varchar2(20),dob date not null,base_slry number not null);
+
+create or replace procedure emp_insert(emp_id in varchar2,ename in varchar2,gender in varchar2,city in varchar2,state in varchar2,dob in date,salary in number)
+is
+begin
+insert into employee values(emp_id,ename,gender,city,state,dob,salary);
+dbms_output.put_line('Succesful entry');
+end;
+
+begin
+emp_insert('emp1','aashish','male','amritsar','punjab','01-may-96',60000);
+end;
+
+create or replace trigger emp_upper
+before insert or update on employee
+for each row
+begin
+:new.emp_id:=upper(:new.emp_id);
+:new.ename:=upper(:new.ename);
+:new.gender:=lower(:new.gender);
+end;
+
+alter trigger emp_upper disable;
+
+create or replace trigger emp_pk
+before insert or update of emp_id on employee
+for each row
+declare
+a employee.emp_id%type;
+begin
+if inserting and (:new.emp_id is null) then
+raise_application_error(-20001,'cant insert null in pk');
+elsif updating and (:new.emp_id is null) then
+raise_application_error(-20004,'cant update to null in pk');
+end if;
+select emp_id into a from employee where emp_id=:new.emp_id;
+raise_application_error(-20002,'U r inserting repeated value,violating pk');
+exception
+when no_data_found then
+null;
+end;
+
+alter trigger emp_pk disable;
+
+
+
+
+create table attendance(emp_id varchar2(20) constraint attendance_fk  references employee(emp_id), 
+D_ate date,p_a varchar2(5) constraint attendance_ch check (p_a in('P','A')),constraint attendance_pk primary key (emp_id,d_ate));
+
+
+create or replace procedure attend_insr(emp_id in varchar2,d_ate in date,p_a in varchar2)
+is
+begin
+insert into attendance values(emp_id,d_ate,p_a);
+dbms_output.put_line('attendance marked');
+end;
+
+begin
+attend_insr('EMP1','01-may-2016','p');
+end;
+
+create or replace trigger attend_upper
+before insert or update on attendance
+for each row
+begin
+:new.emp_id:=upper(:new.emp_id);
+:new.P_A:=upper(:new.P_A);
+end;
+
+alter trigger attend_upper disable;
+
+create or replace procedure count_attend (a in date,b in date,empid in varchar2)
+is
+c number;
+begin
+select count(P_A) into c from attendance where emp_id=empid and  P_A='P' and  d_ate between a and b ;
+dbms_output.put_line(c);
+end;
+
+begin
+count_attend('1-may-16','2-jun-16','EMP1');
+end;
+
+
+create or replace trigger attend_fk
+before insert or update on attendance
+for each row
+declare
+b employee.emp_id%type;
+begin
+select emp_id into b from employee where emp_id=:new.emp_id;
+exception
+when no_data_found then
+raise_application_error(-20001,'no parent record');
+null;
+end;
+
+alter trigger attend_fk disable;
+
+
+create table overtime(emp_id varchar2(20) constraint overtime_fk  references employee(emp_id),
+D_ate date,h_in number, h_out number, constraint overtime_pk primary key(emp_id,d_ate));
+
+create or replace procedure insert_overtime(empid in varchar2,d_ate in date,h_in in number,h_out in number)
+is
+begin
+insert into overtime values(empid,d_ate,h_in,h_out);
+dbms_output.put_line(' overtime entry succesful');
+end;
+
+begin
+insert_overtime('EMP1','01-dec-2016',13,15);
+end;
+
+create table salary(rno varchar2(20) constraint salary_pk primary key,emp_id varchar2(20) constraint salary_fk  references employee(emp_id),s_pending number, 
+overtime_earning number,to_date date,from_date date, bonuses number,s_advance number);
+
+create or replace procedure upd_salary(no in varchar2)
+is
+ot_earn number;
+a date;
+b date;
+c varchar2(20);
+begin
+select to_date,from_date,emp_id into a,b,c from salary where rno=no;
+ot_earn:=hour_upd(a,b,c);
+dbms_output.put_line(ot_earn);
+update salary
+set overtime_earning=ot_earn where rno=no;
+end;
+
+begin
+upd_salary(1);
+end;
+	
+	
+
+
+create or replace function hour_upd(a in date,b in date,empid in varchar2)
+return number
+is
+c number;
+d number;
+begin
+select sum(h_out-h_in) into c from overtime where emp_id=empid and d_ate between a and b;
+dbms_output.put_line(c);
+d:=c*100;
+return d;
+end;
+
+declare 
+c number;
+begin
+c:=hour_upd('01-nov-2016','01-jan-2017','EMP1');
+end;
+
+
+	
+
+create table transaction_in(shipment_id varchar2(20) constraint transaction_in_pk primary key,
+sid varchar2(20) constraint transaction_in_fk references  supplier (sid), quantity number,total_wt number,d_ate date,prate_per_piece number);
+
+create table supplier(sid varchar2(20) constraint supplier_pk primary key,sname varchar2(20),city varchar2(20),
+state varchar2(20));
+
+
+create or replace trigger transp
+after insert or update on transaction_in
+for each row
+declare
+a varchar2(20);
+b varchar2(20);
+begin
+select city,state into a,b from supplier where sid=(:new.sid);
+dbms_output.put_line('you have to collect material from' ||a||b);
+end
+
+insert into supplier values(4,'aash','jal','pun');
+insert into transaction_values(4,4,50,500,sysdate,12);
